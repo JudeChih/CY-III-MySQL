@@ -1,0 +1,321 @@
+資料庫備份方式：
+    完整備份(每周星期日早上)
+    差異備份(每天早上12)
+    交易紀錄備份(每半個小時)
+
+資料庫備援方式：
+    同時存入兩個以上的資料庫，要架設一樣環境的server
+
+關聯式資料庫 => 規矩很多
+文本式資料庫 => 沒有規矩
+
+--------------------------------------------------------
+
+資料定義語言
+
+--------------------------------------------------------
+
+*建立索引
+    分群以後資料量越少越好
+    建立索引很重要
+
+--------------------------------------------------------
+
+MySQL預設排序方式 => 羅馬拼音排序
+SQLServer預設排序 => 筆畫數排序
+
+--------------------------------------------------------
+
+建立資料表的SQL command
+
+CREATE TABLE `toby`.`userinfo` ( `id` VARCHAR(10) NOT NULL , `姓名` VARCHAR(40) NULL , `屋號` INT NULL , PRIMARY KEY (`id`)) ENGINE = InnoDB;
+
+--------------------------------------------------------
+
+設定參考索引
+
+ALTER TABLE `userinfo` ADD CONSTRAINT `fk_house_屋號` FOREIGN KEY (`屋號`) REFERENCES `house`(`屋號`) ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+--------------------------------------------------------
+
+正規化
+
+第一正規化 => 一個欄位只能有一個值
+第二正規化 => 資料表中的欄位都要與PK完全依賴
+第三正規化 => 
+
+--------------------------------------------------------
+
+資料庫建置必須要畫一個ER圖
+
+主索引 => 會有底線
+多對多關係會衍伸出一個資料表
+
+--------------------------------------------------------
+
+根據筆畫數排序
+
+SELECT * from `userinfo` order BY CONVERT(`cname` using big5)
+
+--------------------------------------------------------
+
+SELECT * from `userinfo` order BY CONVERT(`cname` using big5) desc, uid
+先用cname排序 如果遇到cname相同的就用uid排序
+
+--------------------------------------------------------
+
+SELECT * , ifnull(cname , '') from `userinfo`
+如果cname的值是null的話，用空字串替代
+
+--------------------------------------------------------
+
+distinct的用法是重複的只留一筆
+
+select DISTINCT a.uid as '帳號',cname as '性別' ,address as '地址' from userinfo as a,live as b ,house as c ,phone as d WHERE a.uid = b.uid and b.hid = c.hid and c.hid = d.hid
+
+--------------------------------------------------------
+
+sum是總和 , avg是平均
+SELECT sum(fee) from bill
+
+--------------------------------------------------------
+
+group by 針對某的欄位去分組
+ELECT tel, sum(fee) from bill group by tel
+
+--------------------------------------------------------
+
+round(目標,小數點下幾位) 四捨五入
+SELECT tel, round(avg(fee),0) as '平均' from bill group by tel
+
+--------------------------------------------------------
+
+所有要選取的資料都要是被算出來的
+SELECT bill.tel, round(avg(fee),0) as '平均',phone.hid from bill,phone
+where bill.hid = phone.hid
+group by bill.tel,phone.hid
+
+--------------------------------------------------------
+
+SELECT bill.tel, round(avg(fee),0) as '平均',address from bill,phone,house
+where bill.hid = phone.hid and phone.hid = house.hid
+group by bill.tel,address
+
+--------------------------------------------------------
+
+巢狀查詢
+
+select *
+from (
+    SELECT sum(fee) as sum_fee,tel
+    FROM `bill`
+    group by tel
+) as a
+where sum_fee >= 1000
+
+--------------------------------------------------------
+
+查詢出來的結果可視為一個資料表
+
+--------------------------------------------------------
+
+MAX 可以抓取最大值
+select MAX(sum_fee),tel from ( SELECT sum(fee) as sum_fee,tel FROM `bill` group by tel ) as a
+
+--------------------------------------------------------
+
+SELECT b.maxx,c.tel
+from 
+(
+    select Max(sum_fee) as maxx
+    from (
+        SELECT sum(fee) as sum_fee,tel
+        FROM `bill`
+        group by tel
+    ) as a
+) as b,
+(
+    SELECT sum(fee) as sum_fee,tel
+    FROM `bill`
+    group by tel
+) as c
+where b.maxx = c.sum_fee
+
+--------------------------------------------------------
+
+查詢擁有最多電話的使用者
+
+SELECT aa.tel_count,b.cname
+from (
+    select MAX(tel_count) as tel_count
+    from (
+        SELECT u.cname , COUNT(u.cname) as tel_count FROM `userinfo` as u 
+        LEFT JOIN live as l on l.uid = u.uid
+        LEFT JOIN house as h on h.hid = l.hid
+        LEFT JOIN phone as p on p.hid = h.hid
+        WHERE p.tel is NOT null
+        GROUP BY u.uid
+    ) as a
+)as aa,
+(
+	SELECT u.cname , COUNT(u.cname) as tel_count 
+    FROM `userinfo` as u 
+    LEFT JOIN live as l on l.uid = u.uid
+    LEFT JOIN house as h on h.hid = l.hid
+    LEFT JOIN phone as p on p.hid = h.hid
+    WHERE p.tel is NOT null
+    GROUP BY u.uid
+) as b
+WHERE aa.tel_count = b.tel_count
+
+--------------------------------------------------------
+
+select tel , aa.sum_fee
+from(
+	select sum(fee) as sum_fee
+    from bill
+    group by tel
+    order by sum_fee DESC
+    limit 1
+) as aa,(
+    SELECT tel,sum(fee) as sum_fee
+    from bill
+    group BY tel
+) as bb
+where aa.sum_fee = bb.sum_fee
+
+--------------------------------------------------------
+
+列出平均繳費金額超過300元的電話資料
+
+SELECT tel, round(avg(fee),0) as '平均'
+FROM bill
+GROUP BY tel
+HAVING avg(fee) > 300
+
+--------------------------------------------------------
+
+SELECT *   FROM `bill`
+WHERE date_format(dd, '%Y%m') = '201901'
+
+--------------------------------------------------------
+
+可以建立異動
+
+//tr_log_userinfo_insert可以改成任何名稱
+//insert update delete
+//new是新的  old是舊的
+
+delimiter $$
+create trigger tr_log_userinfo_insert after insert
+on userinfo for each row
+begin
+set @body = concat(
+'將[', new.uid, ', ', new.cname,
+'] 加到userinfo資料表中');
+insert into log (body) values (@body);
+end $$
+delimiter ;
+
+--------------------------------------------------------
+
+建立預存程序
+
+Create procedure pro_name()
+Begin
+/////程式碼放這邊
+End;
+
+執行方式
+Call pro_name();
+
+
+
+--------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
